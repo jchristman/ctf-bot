@@ -1,6 +1,7 @@
 const RtmClient  = require('@slack/client').RtmClient;
 const WebClient  = require('@slack/client').WebClient;
 const RTM_EVENTS = require('@slack/client').RTM_EVENTS;
+const https      = require('https');
 
 const bot_token = 'xoxb-239945021729-jw45n1F5kzIy0gZfHjj3CxDk';
 const rtm       = new RtmClient(bot_token);
@@ -11,7 +12,7 @@ var ctfPrefix = '';
 var users = [];
 
 const admins = ['shombo', 'direwolf'];
-const allCommands = ['!help','!add challenge', '!list', '!working', '!not working', '!solve', '!unsolve', '!set ctf', '!archive ctf'];
+const allCommands = ['!help','!add challenge', '!list', '!open', '!working', '!not working', '!solve', '!unsolve', '!set ctf', '!archive ctf', '!eth'];
 
 
 function updateUsers(data) {
@@ -25,6 +26,20 @@ function getUsernameFromId(id) {
 }
 
 
+function getEth(channel) {
+    https.get('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD', res => {
+    res.setEncoding("utf8");
+        let body = "";
+        res.on("data", data => {
+            body += data;
+        });
+        res.on("end", () => {
+            body = JSON.parse(body);
+            rtm.sendMessage('The current price of ETH is  $' + body.USD, channel);
+        });
+    });
+}
+
 function showHelp(channel) {
     var help = "The admins are: \n"
     admins.forEach((admin) => {
@@ -33,10 +48,12 @@ function showHelp(channel) {
     help += "\nHere is a list of commands:\n"
     help += "\n\t`!help`"
     help += "\n\tshows this menu\n"
-    help += "\n\t`!add challenge` [challenge name]";
+    help += "\n\t`!add challenge` {\"name\":\"name\", \"points\": 100, \"type\": \"pwn\"}";
     help += "\n\tadds challenge to the challenges list\n"
     help += "\n\t`!list`"
     help += "\n\tlists available challanges, their status, and those working on it\n"
+    help += "\n\t`!open`"
+    help += "\n\tlists unsolved challanges, their status, and those working on it\n"
     help += "\n\t`!working` [challenge]"
     help += "\n\tadds you to the working list of a challange\n"
     help += "\n\t`!not working`"
@@ -49,20 +66,31 @@ function showHelp(channel) {
     help += "\n\tsets the current ctf name\n"
     help += "\n\t`!archive ctf`"
     help += "\n\tarchives all channels associated with the current ctf"
+    help += "\n\t`!eth`"
+    help += "\n\tcurrent price of ETH in USD\n"
     rtm.sendMessage(help, channel);
 }
 
 
 function addChallenge(challenge, username, channel) {
+    try {
+        challenge = JSON.parse(challenge);
+    }
+
+    catch (e) {
+        rtm.sendMessage("There was an issue with your JSON syntax bruh.", channel);
+        return;
+    }
+
     if (admins.indexOf(username) > -1) {
-        if (challenge in challenges) {
-            rtm.sendMessage('Challenge ' + challenge + ' already exists.', channel);
+        console.log(challenge);
+        if (challenge.name in challenges) {
+            rtm.sendMessage('Challenge ' + challenge.name + ' already exists.', channel);
         }
         else {
-            challenges[challenge] = {'status':'unsolved','working':[]};
-            var message = 'challenge ' + challenge + ' added';
+            challenges[challenge.name] = {'status':'unsolved', 'points': challenge.hasOwnProperty('points') ? challenge.points : 'idk', 'type': challenge.hasOwnProperty('type') ? challenge.type : 'idk', 'working':[]};
+            var message = 'challenge ' + challenge.name + ' added';
             rtm.sendMessage(message, channel)
-            //web.channels.create(ctfPrefix + '-' + challenge);
         }
     }
     else {
@@ -72,16 +100,41 @@ function addChallenge(challenge, username, channel) {
 
 
 function listChallenges(channel) {
-    var message = "";
+    var message = "" + ctfPrefix + "\n\n";
     if (Object.keys(challenges).length  > 0) {
         for (challenge in challenges) {
             message += '`' + challenge + '`\n';
             message += '\tStatus: ' + challenges[challenge]['status'] + '\n';
+            message += '\tPoints: ' + challenges[challenge]['points'] + '\n';
+            message += '\tType: ' + challenges[challenge]['type'] + '\n';
             message += '\tWorking: ' + challenges[challenge]['working'] + '\n';
         }
     }
     else {
-        message = "There aren't any challged at the moment.";
+        message = "There aren't any challenges at the moment.";
+    }
+    rtm.sendMessage(message, channel);
+}
+
+
+function listUnsolved(channel) {
+    var message = "";
+    if (Object.keys(challenges).length  > 0) {
+        for (challenge in challenges) {
+            if (challenges[challenge].status === 'unsolved') {
+                message += '`' + challenge + '`\n';
+                message += '\tStatus: ' + challenges[challenge]['status'] + '\n';
+                message += '\tPoints: ' + challenges[challenge]['points'] + '\n';
+                message += '\tType: ' + challenges[challenge]['type'] + '\n';
+                message += '\tWorking: ' + challenges[challenge]['working'] + '\n';
+            }
+        }
+    }
+    if (message.length > 0) {
+        message = ctfPrefix + "\n" + message;
+    }
+    else {
+        message = ctfPrefix + "\nThere aren't any unsolved challenges at the moment.";
     }
     rtm.sendMessage(message, channel);
 }
@@ -191,6 +244,10 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                         listChallenges(message.channel);
                     }
 
+                    else if (command === '!open') {
+                        listUnsolved(message.channel);
+                    }
+
                     else if (command === '!not working') {
                         notWorking(username, message.channel);
                     }
@@ -210,7 +267,11 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
                     else if (command === '!set ctf') {
                         setCtf(message.text.replace('!set ctf ',''), username, message.channel);
                     }
-                    
+
+                    else if (command === '!eth') {
+                        getEth(message.channel);
+                    }
+
                     else {
                         rtm.sendMessage('That command doesn\'t exist', message.channel);
                     }
