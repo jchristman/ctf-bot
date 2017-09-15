@@ -12,7 +12,7 @@ var ctfPrefix = '';
 var users = [];
 
 const admins = ['shombo', 'direwolf'];
-const allCommands = ['!help','!add challenge', '!list', '!open', '!working', '!not working', '!solve', '!unsolve', '!set ctf', '!archive ctf', '!eth'];
+const allCommands = ['!help','!add challenge', '!delete challenge', '!list', '!open', '!working', '!not working', '!solve', '!unsolve', '!set ctf', '!archive ctf', '!eth'];
 
 
 function updateUsers(data) {
@@ -50,6 +50,8 @@ function showHelp(channel) {
     help += "\n\tshows this menu\n"
     help += "\n\t`!add challenge` {\"name\":\"name\", \"points\": 100, \"type\": \"pwn\"}";
     help += "\n\tadds challenge to the challenges list\n"
+    help += "\n\t`!delete challenge` [challenge]";
+    help += "\n\tdeletes challenge from the challenges list\n"
     help += "\n\t`!list`"
     help += "\n\tlists available challanges, their status, and those working on it\n"
     help += "\n\t`!open`"
@@ -182,6 +184,26 @@ function notWorking(username, channel) {
 }
 
 
+function deleteChallenge(challenge, username, channel) {
+    console.log(challenges);
+    console.log(challenge);
+    console.log(challenge in challenges);
+    if (admins.indexOf(username) > -1) {
+        if (challenge in challenges) {
+            delete challenges[challenge];
+            var message = 'challenge ' + challenge + ' deleted';
+            rtm.sendMessage(message, channel);
+        }
+        else {
+            rtm.sendMessage("That challenge does not exist.", channel);
+        }
+    }
+    else {
+        rtm.sendMessage("Sorry, " + username + ". Only admins can do that.", channel);
+    }
+}
+
+
 function solve(challenge, username, channel) {
     if (admins.indexOf(username) > -1) {
         if (challenge in challenges) {
@@ -238,6 +260,10 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage(message) {
 
                     else if (command === '!add challenge') {
                         addChallenge(message.text.replace('!add challenge ',''), username, message.channel);
+                    }
+
+                    else if (command === '!delete challenge') {
+                        deleteChallenge(message.text.replace('!delete challenge ',''), username, message.channel);
                     }
 
                     else if (command === '!list') {
