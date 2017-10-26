@@ -4,6 +4,14 @@ var _createClass = function () { function defineProperties(target, props) { for 
 
 var _client = require('@slack/client');
 
+var _express = require('express');
+
+var _express2 = _interopRequireDefault(_express);
+
+var _bodyParser = require('body-parser');
+
+var _bodyParser2 = _interopRequireDefault(_bodyParser);
+
 var _https = require('https');
 
 var _https2 = _interopRequireDefault(_https);
@@ -15,6 +23,18 @@ var _lodash2 = _interopRequireDefault(_lodash);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var app = new _express2.default();
+app.use(_bodyParser2.default.urlencoded({ extended: true }));
+var port = 8888;
+
+app.post('/', function (req, res) {
+    console.log(req.body);
+});
+
+app.listen(port, function () {
+    console.log('Server started at localhost:' + port);
+});
 
 var bot_token = 'xoxb-239945021729-jw45n1F5kzIy0gZfHjj3CxDk';
 var rtm = new _client.RtmClient(bot_token);

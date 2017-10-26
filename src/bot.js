@@ -1,6 +1,20 @@
 import { RtmClient, WebClient, RTM_EVENTS } from '@slack/client';
+import Express from 'express';
+import bodyParser from 'body-parser';
 import https from 'https';
 import _ from 'lodash';
+
+const app = new Express()
+app.use(bodyParser.urlencoded({extended: true}))
+const port = 8888;
+
+app.post('/', (req, res) => {
+    console.log(req.body);
+});
+
+app.listen(port, () => {
+    console.log(`Server started at localhost:${port}`)
+});
 
 const bot_token = 'xoxb-239945021729-jw45n1F5kzIy0gZfHjj3CxDk';
 const rtm       = new RtmClient(bot_token);
@@ -247,7 +261,7 @@ class BenderBot {
             }
         }
     }
-    
+
     notImplemented() {
         rtm.sendMessage('Function not yet implemented');
     }

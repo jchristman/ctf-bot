@@ -17,7 +17,12 @@
   "license": "MIT",
   "dependencies": {
     "@slack/client": "^3.13.0",
-    "lodash": "^4.17.4"
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "lodash": "^4.17.4",
+    "request-promise-native": "^1.0.5",
+    "string-tokenizer": "0.0.8",
+    "url-regex": "^4.1.1"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
