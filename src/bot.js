@@ -4,17 +4,9 @@ import bodyParser from 'body-parser';
 import https from 'https';
 import _ from 'lodash';
 
-const app = new Express()
-app.use(bodyParser.urlencoded({extended: true}))
-const port = 8888;
+import { token } from './secrets.json';
 
-app.post('/', (req, res) => {
-    console.log(req.body);
-});
-
-app.listen(port, () => {
-    console.log(`Server started at localhost:${port}`)
-});
+const PORT = 8888;
 
 const bot_token = 'xoxb-239945021729-jw45n1F5kzIy0gZfHjj3CxDk';
 const rtm       = new RtmClient(bot_token);
@@ -41,6 +33,29 @@ class BenderBot {
             '!archive_ctf': ({message, username}) => this.notImplemented(message.text, message.channel),
             '!eth': ({message}) => this.getEth(message.channel)
         };
+
+        this.server = new Express()
+        this.server.use(bodyParser.urlencoded({extended: true}))
+        
+        this.server.post('/', (req, res) => {
+            if (token !== req.body.token) {
+                return res.send('Invalid token!');
+            }
+
+            console.log(req.body);
+
+            let data = {
+                //response_type: 'in_channel', // public to the channel
+                response_type: 'ephemeral',  // private to the user -- default
+                text: 'Command worked!'
+            };
+            
+            return res.json(data);
+        });
+
+        this.server.listen(PORT, () => {
+            console.log(`Server started at localhost:${PORT}`)
+        });
 
         rtm.on(RTM_EVENTS.MESSAGE, (message) => {
             console.log(`${this.getUsernameFromId(message.user)} ::: ${message.text}`);

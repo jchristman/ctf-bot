@@ -20,21 +20,13 @@ var _lodash = require('lodash');
 
 var _lodash2 = _interopRequireDefault(_lodash);
 
+var _secrets = require('./secrets.json');
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var app = new _express2.default();
-app.use(_bodyParser2.default.urlencoded({ extended: true }));
-var port = 8888;
-
-app.post('/', function (req, res) {
-    console.log(req.body);
-});
-
-app.listen(port, function () {
-    console.log('Server started at localhost:' + port);
-});
+var PORT = 8888;
 
 var bot_token = 'xoxb-239945021729-jw45n1F5kzIy0gZfHjj3CxDk';
 var rtm = new _client.RtmClient(bot_token);
@@ -109,6 +101,29 @@ var BenderBot = function () {
                 return _this.getEth(message.channel);
             }
         };
+
+        this.server = new _express2.default();
+        this.server.use(_bodyParser2.default.urlencoded({ extended: true }));
+
+        this.server.post('/', function (req, res) {
+            if (_secrets.token !== req.body.token) {
+                return res.send('Invalid token!');
+            }
+
+            console.log(req.body);
+
+            var data = {
+                //response_type: 'in_channel', // public to the channel
+                response_type: 'ephemeral', // private to the user -- default
+                text: 'Command worked!'
+            };
+
+            return res.json(data);
+        });
+
+        this.server.listen(PORT, function () {
+            console.log('Server started at localhost:' + PORT);
+        });
 
         rtm.on(_client.RTM_EVENTS.MESSAGE, function (message) {
             console.log(_this.getUsernameFromId(message.user) + ' ::: ' + message.text);
