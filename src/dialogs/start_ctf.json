@@ -1,0 +1,18 @@
+{
+    "title": "Start a CTF",
+    "callback_id": "start-ctf",
+    "submit_label": "Submit",
+    "elements": [
+        {
+            "label": "Name",
+            "type": "text",
+            "name": "name",
+            "hint": "Full name of CTF"
+        },
+        {
+            "label": "Channel Prefix",
+            "type": "text",
+            "name": "chan_prefix"
+        }
+    ]
+}

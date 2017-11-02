@@ -4,9 +4,9 @@
   "description": "slack bot",
   "main": "index.js",
   "scripts": {
-    "start": "node bot.js || nodejs bot.js",
-    "compile": "babel src/bot.js -o bot.js",
-    "watch": "babel -w src/bot.js -o bot.js",
+    "start": "node dist/bot.js || nodejs dist/bot.js",
+    "compile": "babel src -d dist",
+    "watch": "babel -w src -d dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -17,9 +17,11 @@
   "license": "MIT",
   "dependencies": {
     "@slack/client": "^3.13.0",
+    "axios": "^0.17.0",
     "body-parser": "^1.18.2",
     "express": "^4.16.2",
     "lodash": "^4.17.4",
+    "querystring": "^0.2.0",
     "request-promise-native": "^1.0.5",
     "string-tokenizer": "0.0.8",
     "url-regex": "^4.1.1"
@@ -27,6 +29,7 @@
   "devDependencies": {
     "babel-cli": "^6.26.0",
     "babel-core": "^6.26.0",
+    "babel-plugin-inline-json-import": "^0.2.1",
     "babel-preset-env": "^1.6.0"
   }
 }

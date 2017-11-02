@@ -2,9 +2,14 @@ import { RtmClient, WebClient, RTM_EVENTS } from '@slack/client';
 import Express from 'express';
 import bodyParser from 'body-parser';
 import https from 'https';
+import request from 'request';
+import axios from 'axios';
+import qs from 'querystring';
 import _ from 'lodash';
 
-import { token } from './secrets.json';
+import { token, oauth_token } from './secrets.json';
+import ADMIN_BUTTONS from './buttons/admin.js';
+import START_CTF from './dialogs/start_ctf.json';
 
 const PORT = 8888;
 
@@ -15,7 +20,7 @@ const web       = new WebClient(bot_token);
 class BenderBot {
     constructor() {
         this.challenges = [];
-        this.ctf_prefix = '';
+        this.ctf = {};
         this.users = [];
         this.admins = ['shombo', 'direwolf', 'jchristman'];
 
@@ -29,28 +34,66 @@ class BenderBot {
             '!not_working': ({message, username}) => this.notWorking(username, message.channel),
             '!solve': ({message, username}) => this.solve(message.text, username, message.channel),
             '!unsolve': ({message, username}) => this.unsolve(message.text, username, message.channel),
-            '!set_ctf': ({message, username}) => this.setCtf(message.text, username, message.channel),
+            //'!set_ctf': ({message, username}) => this.setCtf(message.text, username, message.channel),
             '!archive_ctf': ({message, username}) => this.notImplemented(message.text, message.channel),
             '!eth': ({message}) => this.getEth(message.channel)
         };
 
         this.server = new Express()
         this.server.use(bodyParser.urlencoded({extended: true}))
-        
-        this.server.post('/', (req, res) => {
-            if (token !== req.body.token) {
-                return res.send('Invalid token!');
+
+        this.secure_post = (path, cb) => {
+            this.server.post(path, (req, res) => {
+                console.log(path);
+                res.status(200).end();
+
+                let { body } = req;
+                if (body.payload !== undefined) {
+                    body = JSON.parse(body.payload);
+                }
+
+                console.log(body);
+
+                if (body.token !== token){
+                    res.status(403).end("Access forbidden")
+                } else {
+                    cb(body);
+                }
+            });
+        };
+
+        this.secure_post('/', (body) => {
+            let { response_url } = body;
+
+            let message = {
+                text: this.current_status(),
+                attachments: []
+            };
+
+            if (this.admins.includes(body.user_name)) {
+                let admin_buttons = ADMIN_BUTTONS(this.ctf.name !== undefined);
+                message.attachments.push(admin_buttons);
             }
 
-            console.log(req.body);
+            this.sendMessageToSlackResponseURL(response_url, message)
+        });
 
-            let data = {
-                //response_type: 'in_channel', // public to the channel
-                response_type: 'ephemeral',  // private to the user -- default
-                text: 'Command worked!'
-            };
-            
-            return res.json(data);
+        this.secure_post('/actions', (body) => {
+            if (body.submission !== undefined) {
+                return this.process_submission(body);
+            }
+
+            const action = body.actions[0];
+            switch(action.name) {
+                case 'start':
+                    this.dialog_open(body, START_CTF);
+                    break;
+                case 'end':
+                    this.ctf = {};
+                    break;
+                case 'default':
+                    break;
+            }
         });
 
         this.server.listen(PORT, () => {
@@ -81,6 +124,61 @@ class BenderBot {
         });
 
         rtm.start();
+    }
+
+    sendMessageToSlackResponseURL(responseURL, JSONmessage){
+        var postOptions = {
+            uri: responseURL,
+            method: 'POST',
+            headers: {
+                'Content-type': 'application/json'
+            },
+            json: JSONmessage
+        }
+        request(postOptions, (error, response, body) => {
+            if (error){
+                // handle errors as you see fit
+            }
+        })
+    }
+
+    dialog_open(body, dialog) {
+        const { trigger_id } = body;
+        const data = {
+            token: oauth_token,
+            trigger_id,
+            dialog: JSON.stringify(dialog)
+        };
+        console.log(`Sending ${qs.stringify(data)}`);
+
+        axios.post('https://slack.com/api/dialog.open', qs.stringify(data))
+            .then((res) => {
+                console.log('dialog.open: ', res.data);
+            }).catch((err) => {
+                console.log('dialog.open call failed: ', err);
+            });
+    }
+
+    process_submission(body) {
+        switch(body.callback_id) {
+            case 'start-ctf':
+                this.set_ctf(body.submission.name, body.submission.chan_prefix);
+                break;
+            default:
+                break;
+        }
+    }
+
+    current_status() {
+        let status = '';
+        if (this.ctf.name === undefined) {
+            status += 'Currently, no CTF is running...';
+        } else {
+            status += `Current CTF: ${this.ctf.name}\n`;
+            status += `Currently open challenges:\n`;
+            status += `\tNone`;
+        }
+        return status;
     }
 
     updateUsers(data) {
@@ -259,11 +357,8 @@ class BenderBot {
         }
     }
 
-    setCtf(ctf, username, channel) {
-        if (this.restrict(username)) {
-            this.ctf_prefix = ctf;
-            rtm.sendMessage(`CTF set to: ${ctf}`, channel);
-        }
+    set_ctf(name, chan_prefix) {
+        this.ctf = { name, chan_prefix };
     }
 
     unsolve(challenge, username, channel) {
