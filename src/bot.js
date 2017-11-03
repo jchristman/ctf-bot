@@ -8,8 +8,14 @@ import qs from 'querystring';
 import _ from 'lodash';
 
 import { token, oauth_token } from './secrets.json';
+
+// Import buttons
 import ADMIN_BUTTONS from './buttons/admin.js';
+import NONADMIN_BUTTONS from './buttons/non-admin.js';
+
+// Import dialogs
 import START_CTF from './dialogs/start_ctf.json';
+import ADD_CHALLENGE from './dialogs/add_challenge.json';
 
 const PORT = 8888;
 
@@ -21,6 +27,7 @@ class BenderBot {
     constructor() {
         this.challenges = [];
         this.ctf = {};
+        this.ctf_prefix = '';
         this.users = [];
         this.admins = ['shombo', 'direwolf', 'jchristman'];
 
@@ -34,7 +41,7 @@ class BenderBot {
             '!not_working': ({message, username}) => this.notWorking(username, message.channel),
             '!solve': ({message, username}) => this.solve(message.text, username, message.channel),
             '!unsolve': ({message, username}) => this.unsolve(message.text, username, message.channel),
-            //'!set_ctf': ({message, username}) => this.setCtf(message.text, username, message.channel),
+            '!set_ctf': ({message, username}) => this.setCtf(message.text, username, message.channel),
             '!archive_ctf': ({message, username}) => this.notImplemented(message.text, message.channel),
             '!eth': ({message}) => this.getEth(message.channel)
         };
@@ -75,6 +82,9 @@ class BenderBot {
                 message.attachments.push(admin_buttons);
             }
 
+            let buttons = NONADMIN_BUTTONS(this.ctf.name !== undefined);
+            if (buttons !== null) message.attachments.push(buttons);
+
             this.sendMessageToSlackResponseURL(response_url, message)
         });
 
@@ -90,6 +100,9 @@ class BenderBot {
                     break;
                 case 'end':
                     this.ctf = {};
+                    break;
+                case 'add_challenge':
+                    this.dialog_open(body, ADD_CHALLENGE);
                     break;
                 case 'default':
                     break;
@@ -360,6 +373,14 @@ class BenderBot {
     set_ctf(name, chan_prefix) {
         this.ctf = { name, chan_prefix };
     }
+
+    setCtf(ctf, username, channel) {
+        if (this.restrict(username)) {
+            this.ctf_prefix = ctf;
+            rtm.sendMessage(`CTF set to: ${ctf}`, channel);
+        }
+    }
+
 
     unsolve(challenge, username, channel) {
         if (this.restrict(username)) {

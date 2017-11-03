@@ -1,0 +1,47 @@
+{
+    "title": "Add Challenge",
+    "callback_id": "add-challenge",
+    "submit_label": "Submit",
+    "elements": [
+        {
+            "label": "Name",
+            "type": "text",
+            "name": "name",
+            "hint": "Name of the challenge"
+        },
+        {
+            "label": "Points",
+            "type": "text",
+            "name": "points",
+            "hint": "Number of points the challenge is worth"
+        },
+        {
+            "label": "Category",
+            "type": "select",
+            "name": "category",
+            "placeholder": "Select the category",
+            "options": [
+                {
+                    "label": "Web",
+                    "value": "web"
+                },
+                {
+                    "label": "Pwnable",
+                    "value": "pwnable"
+                },
+                {
+                    "label": "Reverse Engineering",
+                    "value": "re"
+                },
+                {
+                    "label": "Cryptography",
+                    "value": "crypto"
+                },
+                {
+                    "label": "Miscellaneous",
+                    "value": "misc"
+                }
+            ]
+        }
+    ]
+}
