@@ -12,6 +12,15 @@ export default (ctf_running) => {
 
     buttons.actions.push(
         {
+            name: "list_challenges",
+            text: "List Challenges",
+            type: "button",
+            value: "list_challenges"
+        }
+    );
+
+    buttons.actions.push(
+        {
             name: "add_challenge",
             text: "Add Challenge",
             type: "button",

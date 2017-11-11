@@ -12,6 +12,8 @@ import { token, oauth_token } from './secrets.json';
 // Import buttons
 import ADMIN_BUTTONS from './buttons/admin.js';
 import NONADMIN_BUTTONS from './buttons/non-admin.js';
+import CHALLENGE_BUTTON from './buttons/challenge.js';
+import BACK_BUTTON from './buttons/back-button.js';
 
 // Import dialogs
 import START_CTF from './dialogs/start_ctf.json';
@@ -25,8 +27,10 @@ const web       = new WebClient(bot_token);
 
 class BenderBot {
     constructor() {
-        this.challenges = [];
+        this.challenges = {};
         this.ctf = {};
+        this.message_response_url = {};
+
         this.ctf_prefix = '';
         this.users = [];
         this.admins = ['shombo', 'direwolf', 'jchristman'];
@@ -51,9 +55,6 @@ class BenderBot {
 
         this.secure_post = (path, cb) => {
             this.server.post(path, (req, res) => {
-                console.log(path);
-                res.status(200).end();
-
                 let { body } = req;
                 if (body.payload !== undefined) {
                     body = JSON.parse(body.payload);
@@ -64,49 +65,36 @@ class BenderBot {
                 if (body.token !== token){
                     res.status(403).end("Access forbidden")
                 } else {
-                    cb(body);
+                    cb(res, body);
                 }
             });
         };
 
-        this.secure_post('/', (body) => {
+        this.secure_post('/', (res, body) => {
+            res.status(200).end();
             let { response_url } = body;
 
-            let message = {
-                text: this.current_status(),
-                attachments: []
-            };
+            // Now store the response_url with a map of user:channel -> response_url
+            this.message_response_url[`${body.user_id}:${body.channel_id}`] = response_url;
 
-            if (this.admins.includes(body.user_name)) {
-                let admin_buttons = ADMIN_BUTTONS(this.ctf.name !== undefined);
-                message.attachments.push(admin_buttons);
-            }
-
-            let buttons = NONADMIN_BUTTONS(this.ctf.name !== undefined);
-            if (buttons !== null) message.attachments.push(buttons);
-
-            this.sendMessageToSlackResponseURL(response_url, message)
+            let message = this.current_status(body.user_name);
+            this.jsonPost(response_url, message);
         });
 
-        this.secure_post('/actions', (body) => {
+        this.secure_post('/actions', (res, body) => {
             if (body.submission !== undefined) {
-                return this.process_submission(body);
+                const errors = this.process_submission(body);
+                if (errors !== undefined) {
+                    console.log('Sending errors', errors);
+                    res.json(errors);
+                } else {
+                    res.status(200).end();
+                }
+                return;
             }
-
-            const action = body.actions[0];
-            switch(action.name) {
-                case 'start':
-                    this.dialog_open(body, START_CTF);
-                    break;
-                case 'end':
-                    this.ctf = {};
-                    break;
-                case 'add_challenge':
-                    this.dialog_open(body, ADD_CHALLENGE);
-                    break;
-                case 'default':
-                    break;
-            }
+            
+            res.status(200).end();
+            this.process_action(body);
         });
 
         this.server.listen(PORT, () => {
@@ -138,23 +126,32 @@ class BenderBot {
 
         rtm.start();
     }
-
-    sendMessageToSlackResponseURL(responseURL, JSONmessage){
-        var postOptions = {
-            uri: responseURL,
-            method: 'POST',
+    
+    /* ------------------------------------------------------------------
+     * Authorization bearer for a json type post
+     * ------------------------------------------------------------------ */
+    jsonPost(url, data, cb = () => {}) {
+        const headers = {
             headers: {
-                'Content-type': 'application/json'
-            },
-            json: JSONmessage
-        }
-        request(postOptions, (error, response, body) => {
-            if (error){
-                // handle errors as you see fit
+                Authorization: `Bearer ${oauth_token}`
             }
-        })
-    }
+        }
 
+        axios.post(url, data, headers)
+            .then((res) => {
+                if (res.data.ok === false) {
+                    console.log(`Post to ${url} failed: `, data, res.data);
+                } else {
+                    cb(res.data);
+                }
+            }).catch((err) => {
+                console.log(`Post to ${url} failed: `, err);
+            });
+    }
+    
+    /* ------------------------------------------------------------------
+     * Slack specific functions
+     * ------------------------------------------------------------------ */
     dialog_open(body, dialog) {
         const { trigger_id } = body;
         const data = {
@@ -162,38 +159,189 @@ class BenderBot {
             trigger_id,
             dialog: JSON.stringify(dialog)
         };
-        console.log(`Sending ${qs.stringify(data)}`);
 
         axios.post('https://slack.com/api/dialog.open', qs.stringify(data))
             .then((res) => {
-                console.log('dialog.open: ', res.data);
+                if (res.data.ok === false) {
+                    console.log('dialog.open failed: ', res.data);
+                }
             }).catch((err) => {
                 console.log('dialog.open call failed: ', err);
             });
     }
 
+    chat_update(channel, ts, text, attachments) {
+        const data = { channel, ts, text, attachments };
+        this.jsonPost('https://slack.com/api/chat.update', data);
+    }
+
+    chat_postEphemeral(channel, user, text, attachments) {
+        const data = { channel, user, text, attachments };
+        this.jsonPost('https://slack.com/api/chat.postEphemeral', data);
+    }
+
+    channels_create(name, cb) {
+        const data = { name, validate: false };
+        this.jsonPost('https://slack.com/api/channels.create', data, cb);
+    }
+
+    /* ------------------------------------------------------------------
+     * App specific functions
+     * ------------------------------------------------------------------ */
+    process_action(body) {
+        const action = body.actions[0];
+        let message = ''
+
+        // Now store the response_url with a map of user:channel -> response_url
+        this.message_response_url[`${body.user.id}:${body.channel.id}`] = body.response_url;
+
+        switch(action.name) {
+            case 'start':
+                this.dialog_open(body, START_CTF);
+                break;
+            case 'end':
+                this.ctf = {};
+                this.challenges = {};
+                message = this.current_status(body.user.name);
+                this.jsonPost(body.response_url, message);
+                break;
+            case 'add_challenge':
+                this.dialog_open(body, ADD_CHALLENGE);
+                break;
+            case 'list_challenges':
+                message = this.list_challenges(body.user.name);
+                this.jsonPost(body.response_url, message);
+                break;
+            case 'work_on':
+                this.challenges[action.value.split(':')[1]].workers.push(`<@${body.user.id}>`);
+                message = this.list_challenges(body.user.name);
+                this.jsonPost(body.response_url, message);
+                break;
+            default:
+                message = this.current_status(body.user.name);
+                this.jsonPost(body.response_url, message);
+                break;
+        }
+    }
+
     process_submission(body) {
+        // Call this function when the processing of the submission is finished. Need this because
+        // some actions are async, like creating a channel...
+        const status_update = () => {
+            const response_url = this.message_response_url[`${body.user.id}:${body.channel.id}`];
+            if (response_url === undefined) {
+                console.log('Oh no!! Could not find a message to update!!!', body);
+            } else {
+                let message = this.current_status(body.user.name);
+                this.jsonPost(response_url, message);
+            }
+        }
+
         switch(body.callback_id) {
             case 'start-ctf':
-                this.set_ctf(body.submission.name, body.submission.chan_prefix);
+                return this.set_ctf(body.submission, () => { status_update() });
+                break;
+            case 'add-challenge':
+                return this.add_challenge(body.submission, () => { status_update() });
                 break;
             default:
                 break;
         }
     }
 
-    current_status() {
-        let status = '';
+    current_status(username) {
+        let message = {
+            text: '',
+            attachments: []
+        };
+
         if (this.ctf.name === undefined) {
-            status += 'Currently, no CTF is running...';
+            message.text += 'Currently, no CTF is running...';
         } else {
-            status += `Current CTF: ${this.ctf.name}\n`;
-            status += `Currently open challenges:\n`;
-            status += `\tNone`;
+            message.text += `Current CTF: ${this.ctf.name}\n`;
         }
-        return status;
+
+        let buttons = NONADMIN_BUTTONS(this.ctf.name !== undefined);
+        if (buttons !== null) message.attachments.push(buttons);
+
+        if (this.admins.includes(username)) {
+            let admin_buttons = ADMIN_BUTTONS(this.ctf.name !== undefined);
+            message.attachments.push(admin_buttons);
+        }
+
+        return message;
     }
 
+    set_ctf(ctf, cb = () => {}) {
+        this.ctf = ctf;
+        cb();
+    }
+
+    add_challenge(challenge, cb = () => {}) {
+        if (isNaN(challenge.points)) {
+            return { errors: [{ name: "points", error: "Must be a number!" }] };
+        }
+
+        const channel_name = `${this.ctf.chan_prefix}-${challenge.name}`;
+        this.channels_create(channel_name, (data) => {
+            const channel_link = `<#${data.channel.id}|${data.channel.name}>`;
+            
+            challenge.channel = {
+                name: channel_name,
+                link: channel_link
+            }
+
+            challenge.workers = [];
+
+            this.challenges[challenge.name] = challenge;
+
+            cb(this.challenges[challenge.name]);
+        });
+    }
+
+    list_challenges(username) {
+        let message = {
+            text: '',
+            attachments: []
+        };
+
+        message.text += 'Open challenges:\n';
+
+        message.attachments.push(BACK_BUTTON());
+
+        _.each(this.challenges, (challenge, name) => {
+            message.attachments.push(CHALLENGE_BUTTON(challenge));
+        });
+
+        return message;
+    }
+
+    /* ------------------------------------------------------------------
+     * Old bot functions
+     * ------------------------------------------------------------------ */
+    addChallenge(challenge, username, channel) {
+        try {
+            challenge = JSON.parse(challenge);
+        } catch (e) {
+            rtm.sendMessage("There was an issue with your JSON syntax bruh.", channel);
+            return;
+        }
+
+        if (this.restrict(username)) {
+            if (challenge.name in this.challenges) {
+                rtm.sendMessage(`Challenge ${challenge.name} already exists`, channel);
+            } else {
+                this.challenges[challenge.name] = {
+                    'status': 'unsolved',
+                    'points': challenge.points || 'idk',
+                    'type': challenge.type || 'idk',
+                    'working': []
+                };
+                rtm.sendMessage(`${challenge.name} has been added`, channel)
+            }
+        }
+    }
+    
     updateUsers(data) {
         this.users = data.members;
     }
@@ -243,37 +391,6 @@ class BenderBot {
         rtm.sendMessage(help, channel);
     }
 
-    restrict(username) {
-        if (this.admins.indexOf(username) > -1) {
-            return true;
-        } else {
-            rtm.sendMessage(`Sorry ${username}. Only admins can do that`);
-            return false;
-        }
-    }
-
-    addChallenge(challenge, username, channel) {
-        try {
-            challenge = JSON.parse(challenge);
-        } catch (e) {
-            rtm.sendMessage("There was an issue with your JSON syntax bruh.", channel);
-            return;
-        }
-
-        if (this.restrict(username)) {
-            if (challenge.name in this.challenges) {
-                rtm.sendMessage(`Challenge ${challenge.name} already exists`, channel);
-            } else {
-                this.challenges[challenge.name] = {
-                    'status': 'unsolved',
-                    'points': challenge.points || 'idk',
-                    'type': challenge.type || 'idk',
-                    'working': []
-                };
-                rtm.sendMessage(`${challenge.name} has been added`, channel)
-            }
-        }
-    }
 
     listChallenges(channel) {
         let message = "" + this.ctf_prefix + "\n\n";
@@ -368,10 +485,6 @@ class BenderBot {
                 rtm.sendMessage("${challenge} does not exist.", channel);
             }
         }
-    }
-
-    set_ctf(name, chan_prefix) {
-        this.ctf = { name, chan_prefix };
     }
 
     setCtf(ctf, username, channel) {
