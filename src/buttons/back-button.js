@@ -17,5 +17,15 @@ export default () => {
         }
     );
 
+    buttons.actions.push(
+        {
+            name: "add_challenge",
+            text: "Add Challenge",
+            type: "button",
+            value: "add_challenge",
+        }
+    );
+
+
     return buttons;
 }

@@ -190,7 +190,8 @@ class BenderBot {
      * ------------------------------------------------------------------ */
     process_action(body) {
         const action = body.actions[0];
-        let message = ''
+        let message = '',
+            c_user = '';
 
         // Now store the response_url with a map of user:channel -> response_url
         this.message_response_url[`${body.user.id}:${body.channel.id}`] = body.response_url;
@@ -209,12 +210,23 @@ class BenderBot {
                 this.dialog_open(body, ADD_CHALLENGE);
                 break;
             case 'list_challenges':
-                message = this.list_challenges(body.user.name);
+                message = this.list_challenges(body.user);
                 this.jsonPost(body.response_url, message);
                 break;
             case 'work_on':
-                this.challenges[action.value.split(':')[1]].workers.push(`<@${body.user.id}>`);
-                message = this.list_challenges(body.user.name);
+                c_user = `<@${body.user.id}>`;
+                _.each(this.challenges, (challenge) => {
+                    challenge.workers = _.filter(challenge.workers, (user) => user !== c_user);
+                });
+                this.challenges[action.value.split(':')[1]].workers.push(c_user);
+                message = this.list_challenges(body.user);
+                this.jsonPost(body.response_url, message);
+                break;
+            case 'no_work_on':
+                c_user = `<@${body.user.id}>`;
+                this.challenges[action.value.split(':')[1]].workers = 
+                    _.filter(this.challenges[action.value.split(':')[1]].workers, (user) => user !== c_user);
+                message = this.list_challenges(body.user);
                 this.jsonPost(body.response_url, message);
                 break;
             default:
@@ -242,7 +254,15 @@ class BenderBot {
                 return this.set_ctf(body.submission, () => { status_update() });
                 break;
             case 'add-challenge':
-                return this.add_challenge(body.submission, () => { status_update() });
+                return this.add_challenge(body.submission, () => {
+                    const response_url = this.message_response_url[`${body.user.id}:${body.channel.id}`];
+                    if (response_url === undefined) {
+                        console.log('Oh no!! Could not find a message to update!!!', body);
+                    } else {
+                        let message = this.list_challenges(body.user);
+                        this.jsonPost(response_url, message);
+                    }
+                });
                 break;
             default:
                 break;
@@ -299,7 +319,7 @@ class BenderBot {
         });
     }
 
-    list_challenges(username) {
+    list_challenges(user) {
         let message = {
             text: '',
             attachments: []
@@ -310,7 +330,7 @@ class BenderBot {
         message.attachments.push(BACK_BUTTON());
 
         _.each(this.challenges, (challenge, name) => {
-            message.attachments.push(CHALLENGE_BUTTON(challenge));
+            message.attachments.push(CHALLENGE_BUTTON(challenge, user));
         });
 
         return message;
