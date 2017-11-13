@@ -14,10 +14,11 @@ import ADMIN_BUTTONS from './buttons/admin.js';
 import NONADMIN_BUTTONS from './buttons/non-admin.js';
 import CHALLENGE_BUTTON from './buttons/challenge.js';
 import BACK_BUTTON from './buttons/back-button.js';
+import FILTERS from './buttons/filters.js';
 
 // Import dialogs
-import START_CTF from './dialogs/start_ctf.json';
-import ADD_CHALLENGE from './dialogs/add_challenge.json';
+import START_CTF from './dialogs/start_ctf.js';
+import ADD_CHALLENGE from './dialogs/add_challenge.js';
 
 const PORT = 8888;
 
@@ -29,7 +30,7 @@ class BenderBot {
     constructor() {
         this.challenges = {};
         this.ctf = {};
-        this.message_response_url = {};
+        this.interactive_states = {};
 
         this.ctf_prefix = '';
         this.users = [];
@@ -75,7 +76,10 @@ class BenderBot {
             let { response_url } = body;
 
             // Now store the response_url with a map of user:channel -> response_url
-            this.message_response_url[`${body.user_id}:${body.channel_id}`] = response_url;
+            this.interactive_states[`${body.user_id}:${body.channel_id}`] = {
+                response_url,
+                filters: []
+            };
 
             let message = this.current_status(body.user_name);
             this.jsonPost(response_url, message);
@@ -191,14 +195,15 @@ class BenderBot {
     process_action(body) {
         const action = body.actions[0];
         let message = '',
-            c_user = '';
+            c_user = '',
+            filter = '';
 
         // Now store the response_url with a map of user:channel -> response_url
-        this.message_response_url[`${body.user.id}:${body.channel.id}`] = body.response_url;
+        this.interactive_states[`${body.user.id}:${body.channel.id}`].response_url = body.response_url;
 
         switch(action.name) {
             case 'start':
-                this.dialog_open(body, START_CTF);
+                this.dialog_open(body, START_CTF());
                 break;
             case 'end':
                 this.ctf = {};
@@ -207,10 +212,10 @@ class BenderBot {
                 this.jsonPost(body.response_url, message);
                 break;
             case 'add_challenge':
-                this.dialog_open(body, ADD_CHALLENGE);
+                this.dialog_open(body, ADD_CHALLENGE());
                 break;
             case 'list_challenges':
-                message = this.list_challenges(body.user);
+                message = this.list_challenges(body);
                 this.jsonPost(body.response_url, message);
                 break;
             case 'work_on':
@@ -219,14 +224,27 @@ class BenderBot {
                     challenge.workers = _.filter(challenge.workers, (user) => user !== c_user);
                 });
                 this.challenges[action.value.split(':')[1]].workers.push(c_user);
-                message = this.list_challenges(body.user);
+                message = this.list_challenges(body);
                 this.jsonPost(body.response_url, message);
                 break;
             case 'no_work_on':
                 c_user = `<@${body.user.id}>`;
                 this.challenges[action.value.split(':')[1]].workers = 
                     _.filter(this.challenges[action.value.split(':')[1]].workers, (user) => user !== c_user);
-                message = this.list_challenges(body.user);
+                message = this.list_challenges(body);
+                this.jsonPost(body.response_url, message);
+                break;
+            case 'add_filter':
+                filter = action.value.split(':')[1];
+                this.interactive_states[`${body.user.id}:${body.channel.id}`].filters.push(filter);
+                message = this.list_challenges(body);
+                this.jsonPost(body.response_url, message);
+                break;
+            case 'remove_filter':
+                filter = action.value.split(':')[1];
+                this.interactive_states[`${body.user.id}:${body.channel.id}`].filters =
+                    _.filter(this.interactive_states[`${body.user.id}:${body.channel.id}`].filters, (_filter) => _filter !== filter);
+                message = this.list_challenges(body);
                 this.jsonPost(body.response_url, message);
                 break;
             default:
@@ -240,7 +258,7 @@ class BenderBot {
         // Call this function when the processing of the submission is finished. Need this because
         // some actions are async, like creating a channel...
         const status_update = () => {
-            const response_url = this.message_response_url[`${body.user.id}:${body.channel.id}`];
+            const response_url = this.interactive_states[`${body.user.id}:${body.channel.id}`].response_url;
             if (response_url === undefined) {
                 console.log('Oh no!! Could not find a message to update!!!', body);
             } else {
@@ -255,11 +273,11 @@ class BenderBot {
                 break;
             case 'add-challenge':
                 return this.add_challenge(body.submission, () => {
-                    const response_url = this.message_response_url[`${body.user.id}:${body.channel.id}`];
+                    const response_url = this.interactive_states[`${body.user.id}:${body.channel.id}`].response_url;
                     if (response_url === undefined) {
                         console.log('Oh no!! Could not find a message to update!!!', body);
                     } else {
-                        let message = this.list_challenges(body.user);
+                        let message = this.list_challenges(body);
                         this.jsonPost(response_url, message);
                     }
                 });
@@ -319,7 +337,9 @@ class BenderBot {
         });
     }
 
-    list_challenges(user) {
+    list_challenges(body) {
+        const current_filters = this.interactive_states[`${body.user.id}:${body.channel.id}`].filters;
+
         let message = {
             text: '',
             attachments: []
@@ -328,9 +348,10 @@ class BenderBot {
         message.text += 'Open challenges:\n';
 
         message.attachments.push(BACK_BUTTON());
+        message.attachments.push(FILTERS(current_filters));
 
         _.each(this.challenges, (challenge, name) => {
-            message.attachments.push(CHALLENGE_BUTTON(challenge, user));
+            message.attachments.push(CHALLENGE_BUTTON(challenge, body.user));
         });
 
         return message;
