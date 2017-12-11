@@ -339,6 +339,7 @@ class BenderBot {
 
     list_challenges(body) {
         const current_filters = this.interactive_states[`${body.user.id}:${body.channel.id}`].filters;
+        console.log(current_filters);
 
         let message = {
             text: '',
@@ -350,7 +351,11 @@ class BenderBot {
         message.attachments.push(BACK_BUTTON());
         message.attachments.push(FILTERS(current_filters));
 
-        _.each(this.challenges, (challenge, name) => {
+        const filtered_challenges = _.filter(this.challenges,
+            (challenge) => current_filters.length === 0 || _.includes(current_filters, challenge.category)
+        );
+
+        _.each(filtered_challenges, (challenge, name) => {
             message.attachments.push(CHALLENGE_BUTTON(challenge, body.user));
         });
 

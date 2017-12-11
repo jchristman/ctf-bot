@@ -20,6 +20,15 @@ export default (challenge, user) => {
                 value: `no_work_on:${challenge.name}`
             }
         );
+
+        buttons.actions.push(
+            {
+                name: 'mark_solved',
+                text: 'Mark problem as solved',
+                type: 'button',
+                value: `mark_solved:${challenge.name}`
+            }
+        );
     } else {
         buttons.actions.push(
             {
