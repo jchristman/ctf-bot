@@ -4,11 +4,11 @@ import categories from '../dialogs/categories.js';
 
 export default (current_filters) => {
     let buttons = {
-        text: "Filters for open challenges",
-        fallback: "",
-        callback_id: "default",
-        color: "#3AA3E3",
-        attachment_type: "default",
+        text: 'Filters for open challenges',
+        fallback: '',
+        callback_id: 'default',
+        color: '#3AA3E3',
+        attachment_type: 'default',
         actions: []
     }
 

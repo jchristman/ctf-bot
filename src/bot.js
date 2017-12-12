@@ -196,7 +196,8 @@ class BenderBot {
         const action = body.actions[0];
         let message = '',
             c_user = '',
-            filter = '';
+            filter = '',
+            chal = '';
 
         // Now store the response_url with a map of user:channel -> response_url
         this.interactive_states[`${body.user.id}:${body.channel.id}`].response_url = body.response_url;
@@ -244,6 +245,12 @@ class BenderBot {
                 filter = action.value.split(':')[1];
                 this.interactive_states[`${body.user.id}:${body.channel.id}`].filters =
                     _.filter(this.interactive_states[`${body.user.id}:${body.channel.id}`].filters, (_filter) => _filter !== filter);
+                message = this.list_challenges(body);
+                this.jsonPost(body.response_url, message);
+                break;
+            case 'mark_solved':
+                chal = action.value.split(':')[1];
+                this.challenges[chal].solved = true;
                 message = this.list_challenges(body);
                 this.jsonPost(body.response_url, message);
                 break;
@@ -330,6 +337,7 @@ class BenderBot {
             }
 
             challenge.workers = [];
+            challenge.solved = false;
 
             this.challenges[challenge.name] = challenge;
 
@@ -339,7 +347,6 @@ class BenderBot {
 
     list_challenges(body) {
         const current_filters = this.interactive_states[`${body.user.id}:${body.channel.id}`].filters;
-        console.log(current_filters);
 
         let message = {
             text: '',
@@ -352,7 +359,7 @@ class BenderBot {
         message.attachments.push(FILTERS(current_filters));
 
         const filtered_challenges = _.filter(this.challenges,
-            (challenge) => current_filters.length === 0 || _.includes(current_filters, challenge.category)
+            (challenge) => (current_filters.length === 0 || _.includes(current_filters, challenge.category)) && !challenge.solved
         );
 
         _.each(filtered_challenges, (challenge, name) => {
