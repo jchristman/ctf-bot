@@ -33,8 +33,9 @@ class BenderBot {
         this.interactive_states = {};
 
         this.ctf_prefix = '';
+        this.main_channel = '';
         this.users = [];
-        this.admins = ['shombo', 'direwolf', 'jchristman'];
+        this.admins = ['shombo', 'direwolf', 'jchristman', 'wparks'];
 
         this.commands = {
             '!help': ({message}) => this.showHelp(message.channel),
@@ -78,7 +79,8 @@ class BenderBot {
             // Now store the response_url with a map of user:channel -> response_url
             this.interactive_states[`${body.user_id}:${body.channel_id}`] = {
                 response_url,
-                filters: []
+                filters: [],
+                view_completed: true
             };
 
             let message = this.current_status(body.user_name);
@@ -184,6 +186,11 @@ class BenderBot {
         this.jsonPost('https://slack.com/api/chat.postEphemeral', data);
     }
 
+    chat_postMessage(channel, user, text, attachments) {
+        const data = { channel, user, text, attachments };
+        this.jsonPost('https://slack.com/api/chat.postMessage', data);
+    }
+
     channels_create(name, cb) {
         const data = { name, validate: false };
         this.jsonPost('https://slack.com/api/channels.create', data, cb);
@@ -204,6 +211,7 @@ class BenderBot {
 
         switch(action.name) {
             case 'start':
+                this.main_channel = body.channel.id;
                 this.dialog_open(body, START_CTF());
                 break;
             case 'end':
@@ -251,8 +259,11 @@ class BenderBot {
             case 'mark_solved':
                 chal = action.value.split(':')[1];
                 this.challenges[chal].solved = true;
+                this.challenges[chal].solvedBy = body.user.id;
                 message = this.list_challenges(body);
                 this.jsonPost(body.response_url, message);
+
+                this.chat_postMessage(this.main_channel, '', `${this.challenges[chal].name} was just solved by <@${this.challenges[chal].solvedBy}>! Way to go champ...`, []);
                 break;
             default:
                 message = this.current_status(body.user.name);
@@ -281,6 +292,7 @@ class BenderBot {
             case 'add-challenge':
                 return this.add_challenge(body.submission, () => {
                     const response_url = this.interactive_states[`${body.user.id}:${body.channel.id}`].response_url;
+
                     if (response_url === undefined) {
                         console.log('Oh no!! Could not find a message to update!!!', body);
                     } else {
@@ -353,18 +365,27 @@ class BenderBot {
             attachments: []
         };
 
-        message.text += 'Open challenges:\n';
+        message.text += 'Challenges:\n';
 
         message.attachments.push(BACK_BUTTON());
-        message.attachments.push(FILTERS(current_filters));
+        _.each(FILTERS(current_filters), (filter) => message.attachments.push(filter));
 
+        console.log(`--- ${current_filters} ---`);
         const filtered_challenges = _.filter(this.challenges,
-            (challenge) => (current_filters.length === 0 || _.includes(current_filters, challenge.category)) && !challenge.solved
+            (challenge) => {
+                if ((challenge.solved && !_.includes(current_filters, "Hide Completed")) || !challenge.solved) {
+                    return (current_filters.length === 0 || _.includes(current_filters, challenge.category));
+                }
+            }
         );
 
+        console.log(this.challenges);
+        console.log(filtered_challenges);
         _.each(filtered_challenges, (challenge, name) => {
             message.attachments.push(CHALLENGE_BUTTON(challenge, body.user));
         });
+
+        console.log(message);
 
         return message;
     }

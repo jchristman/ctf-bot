@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 import categories from './categories.js';
 
 const add_challenge = () => {
@@ -24,7 +26,7 @@ const add_challenge = () => {
                 name: "category",
                 placeholder: "Select the category",
                 hint: "Please note if you think a category should be perma-added, and just use misc if it doesn't fit on of the others for now",
-                options: categories
+                options: _.slice(categories, 0, categories.length - 1)
             }
         ]
     }

@@ -2,7 +2,7 @@ import _ from 'underscore';
 
 export default (challenge, user) => {
     let buttons = {
-        text: `Name: ${challenge.name}  |  Points: ${challenge.points}  |  Category: ${challenge.category}  |  Channel: ${challenge.channel.link}\nCurrent workers: ${challenge.workers.length > 0 ? challenge.workers.join(', ') : 'None'}`,
+        text: `Name: ${challenge.name}  |  Points: ${challenge.points}  |  Category: ${challenge.category}  |  Channel: ${challenge.channel.link}\nCurrent workers: ${challenge.workers.length > 0 ? challenge.workers.join(', ') : 'None'}\nSolved By: ${!challenge.solved ? 'Not solved yet' : '<@' + challenge.solvedBy +'>'}`,
         fallback: '',
         callback_id: 'challenge',
         color: '#3AA3E3',

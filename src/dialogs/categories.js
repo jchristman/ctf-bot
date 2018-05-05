@@ -18,5 +18,12 @@ export default [
     {
         label: "Miscellaneous",
         value: "Misc"
+    },
+
+    // ------------------------------- Make sure this one is always last
+
+    {
+        label: "Hide Completed",
+        value: "Hide Completed"
     }
 ];
