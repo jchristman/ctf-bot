@@ -6,6 +6,7 @@ import request from 'request';
 import axios from 'axios';
 import qs from 'querystring';
 import _ from 'lodash';
+import getRandomQuote from 'get-random-quote';
 
 import { token, oauth_token } from './secrets.json';
 
@@ -154,6 +155,25 @@ class BenderBot {
                 console.log(`Post to ${url} failed: `, err);
             });
     }
+
+    jsonGet(url, cb = () => {}) {
+        if (url.includes('?')) {
+            url += `&token=${oauth_token}`;
+        } else {
+            url += `?token=${oauth_token}`;
+        }
+        axios.get(url)
+            .then((res) => {
+                if (res.data.ok === false) {
+                    console.log(`Get to ${url} failed: `, res.data);
+                } else {
+                    cb(res.data);
+                }
+            }).catch((err) => {
+                console.log(`Get to ${url} failed: `, err);
+            });
+    }
+
     
     /* ------------------------------------------------------------------
      * Slack specific functions
@@ -196,6 +216,15 @@ class BenderBot {
         this.jsonPost('https://slack.com/api/channels.create', data, cb);
     }
 
+    list_channels(cb) {
+        this.jsonGet('https://slack.com/api/channels.list?exclude_archived=true', cb);
+    }
+
+    archive_channel(channel_id) {
+        const data = { channel: channel_id };
+        this.jsonPost('https://slack.com/api/channels.archive', data);
+    }
+
     /* ------------------------------------------------------------------
      * App specific functions
      * ------------------------------------------------------------------ */
@@ -213,6 +242,16 @@ class BenderBot {
             case 'start':
                 this.main_channel = body.channel.id;
                 this.dialog_open(body, START_CTF());
+                break;
+            case 'archive':
+                this.list_channels((results) => {
+                    _.each(results.channels, (channel) => {
+                        if (channel.name.startsWith(this.ctf.chan_prefix) || channel.id === this.main_channel) {
+                            console.log(`Archiving ${channel.name}`);
+                            this.archive_channel(channel.id);
+                        }
+                    });
+                });
                 break;
             case 'end':
                 this.ctf = {};
@@ -263,7 +302,10 @@ class BenderBot {
                 message = this.list_challenges(body);
                 this.jsonPost(body.response_url, message);
 
-                this.chat_postMessage(this.main_channel, '', `${this.challenges[chal].name} was just solved by <@${this.challenges[chal].solvedBy}>! Way to go champ...`, []);
+                getRandomQuote()
+                    .then((quote) => {
+                        this.chat_postMessage(this.main_channel, '', `${this.challenges[chal].name} was just solved by <@${this.challenges[chal].solvedBy}>!\n\n${quote.text}\n- ${quote.author}`, []);
+                    });
                 break;
             default:
                 message = this.current_status(body.user.name);
@@ -373,8 +415,10 @@ class BenderBot {
         console.log(`--- ${current_filters} ---`);
         const filtered_challenges = _.filter(this.challenges,
             (challenge) => {
-                if ((challenge.solved && !_.includes(current_filters, "Hide Completed")) || !challenge.solved) {
-                    return (current_filters.length === 0 || _.includes(current_filters, challenge.category));
+                const hide_completed = _.includes(current_filters, "Hide Completed");
+                const num_filters = current_filters.length - (hide_completed ? 1 : 0);
+                if ((challenge.solved && !hide_completed) || !challenge.solved) {
+                    return (num_filters === 0 || _.includes(current_filters, challenge.category));
                 }
             }
         );

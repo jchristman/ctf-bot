@@ -24,6 +24,21 @@ export default (ctf_running) => {
                 }
             }
         );
+        admin_buttons.actions.push(
+            {
+                name: "archive",
+                text: "Archive Channels",
+                style: "danger",
+                type: "button",
+                value: "archive",
+                confirm: {
+                    title: "Are you sure?",
+                    text: "You cannot unarchive these channels automatically...",
+                    ok_text: "Yes",
+                    dismiss_text: "No"
+                }
+            }
+        );
     } else {
         admin_buttons.actions.push(
             {
