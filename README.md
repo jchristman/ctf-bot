@@ -1,15 +1,15 @@
-Bender Bot
+CTF Bot
 ==========
 
-Our lovable slack bot, Bender.
+Our lovable slack bot.
 
 
 Installation
 ============
 
 ```bash
-git clone https://git.shellcollecting.club/shellcollectingclub/bender_bot
-cd bender_bot
+git clone https://gitlab.com/shellcollectingclub/ctf-bot.git
+cd ctf-bot
 npm install
 npm run compile
 npm run start
