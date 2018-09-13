@@ -13,4 +13,4 @@ COPY src src
 RUN npm run compile
 
 EXPOSE 8888
-CMD ["node" "dist/bot.js"]
+CMD ["node", "dist/bot.js"]
