@@ -285,7 +285,10 @@ class BenderBot {
 
         switch(body.callback_id) {
             case 'start-ctf':
-                return this.set_ctf(body.submission, () => { status_update() });
+                const result = this.set_ctf(body.submission, () => { status_update() });
+                this.chat_postMessage(this.main_channel, '', `<!channel>, the ${this.ctf.name} bot has started. Type \`/scc\` to get started!`, []);
+                console.log(this.ctf);
+                return result;
                 break;
             case 'add-challenge':
                 return this.add_challenge(body.submission, () => {
